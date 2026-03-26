@@ -24,6 +24,9 @@ It combines a screen-space post FX pass with a lens flare overlay and optional e
 - Optional occlusion checks for flare sources
 - Included example scene and fly camera helper
 
+![screenshot]([(https://raw.githubusercontent.com/devkine/Epic-Camera-X/refs/heads/main/EpicCameraX-01.png)])
+
+
 ## Godot version
 
 Designed for **Godot 4.x**.
