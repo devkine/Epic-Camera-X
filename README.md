@@ -307,7 +307,3 @@ addons/
 ## Credits
 
 - Author: **Diginaat, DevKine**
-
-## License
-
-Add your preferred license here for public release.
