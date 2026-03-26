@@ -1,0 +1,250 @@
+shader_type canvas_item;
+render_mode unshaded, blend_add;
+
+const int MAX_FLARES = 12;
+
+uniform int flare_count = 0;
+uniform vec4 flare_data[MAX_FLARES]; // x=uv.x, y=uv.y, z=size, w=intensity
+uniform vec4 flare_tint[MAX_FLARES]; // rgb=tint
+
+// kept only so your script does not break if it still sets them
+uniform sampler2D bokeh_texture : source_color, repeat_disable, filter_linear;
+uniform bool use_bokeh_texture = false;
+
+// existing script-driven controls
+uniform float master_intensity : hint_range(0.0, 8.0, 0.01) = 1.0;
+uniform float blur_amount : hint_range(0.0, 8.0, 0.01) = 1.2;
+uniform float chroma_amount : hint_range(0.0, 0.05, 0.0001) = 0.0015;
+uniform float halo_intensity : hint_range(0.0, 4.0, 0.01) = 0.45;
+uniform float ghost_intensity : hint_range(0.0, 4.0, 0.01) = 0.22;
+uniform float ray_intensity : hint_range(0.0, 4.0, 0.01) = 0.06;
+uniform float imperfection : hint_range(0.0, 1.0, 0.01) = 0.20;
+uniform float ray_count : hint_range(4.0, 16.0, 1.0) = 6.0;
+uniform float ray_length : hint_range(0.2, 4.0, 0.01) = 1.35;
+uniform float ghost_spread : hint_range(0.1, 3.0, 0.01) = 1.0;
+uniform float source_bloom_scale : hint_range(0.1, 4.0, 0.01) = 0.9;
+
+// look tuning
+uniform float flare_saturation : hint_range(0.0, 2.0, 0.01) = 0.82;
+uniform float ghost_opacity_falloff : hint_range(0.1, 4.0, 0.01) = 1.35;
+uniform float ghost_softness : hint_range(0.0, 2.0, 0.01) = 0.65;
+uniform float source_core_intensity : hint_range(0.0, 4.0, 0.01) = 0.35;
+uniform float ghost_nearness : hint_range(0.1, 2.0, 0.01) = 1.0;
+uniform float ghost_color_boost : hint_range(0.0, 2.0, 0.01) = 1.25;
+
+mat2 rot2(float a) {
+	float s = sin(a);
+	float c = cos(a);
+	return mat2(vec2(c, -s), vec2(s, c));
+}
+
+float hash21(vec2 p) {
+	p = fract(p * vec2(123.34, 345.45));
+	p += dot(p, p + 34.345);
+	return fract(p.x * p.y);
+}
+
+vec3 set_saturation(vec3 c, float s) {
+	float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+	return mix(vec3(l), c, s);
+}
+
+// soft octagon aperture mask
+float octagon_mask(vec2 p, float radius, float softness, float rotation) {
+	p = rot2(rotation) * p;
+	p /= max(radius, 0.0001);
+	p = abs(p);
+
+	float d = max(max(p.x, p.y), (p.x + p.y) * 0.70710678);
+	return 1.0 - smoothstep(1.0 - softness, 1.0 + softness, d);
+}
+
+float blurred_octagon(vec2 p, float blur, float rotation) {
+	float s = 0.10 + blur * 0.06 + ghost_softness * 0.04;
+	vec2 o = vec2(0.08 + blur * 0.02, 0.0);
+
+	float a0 = octagon_mask(p, 1.0, s, rotation);
+	float a1 = octagon_mask(p + vec2( o.x, 0.0), 1.0, s, rotation);
+	float a2 = octagon_mask(p + vec2(-o.x, 0.0), 1.0, s, rotation);
+	float a3 = octagon_mask(p + vec2(0.0,  o.x), 1.0, s, rotation);
+	float a4 = octagon_mask(p + vec2(0.0, -o.x), 1.0, s, rotation);
+
+	return (a0 * 2.0 + a1 + a2 + a3 + a4) / 6.0;
+}
+
+float dirt_mask(vec2 uv01, float amt) {
+	vec2 cell = floor(uv01 * 36.0);
+	float n1 = hash21(cell);
+	float n2 = hash21(cell + vec2(7.0, 19.0));
+	float n = mix(n1, n2, 0.5);
+	return mix(1.0, 0.90 + n * 0.10, amt);
+}
+
+vec3 octo_bokeh_sprite(
+	vec2 screen_uv,
+	vec2 center_uv,
+	float size,
+	vec2 axis,
+	vec3 tint,
+	float blur,
+	float chroma,
+	float rotation,
+	float opacity
+) {
+	vec2 p = (screen_uv - center_uv) / max(size, 0.0001);
+
+	float r = length(p);
+	if (r > 1.4) {
+		return vec3(0.0);
+	}
+
+	vec2 tang = vec2(-axis.y, axis.x);
+	vec2 ca = axis * chroma * 8.0 + tang * chroma * 3.5;
+
+	float mr = blurred_octagon(p + ca, blur, rotation + 0.01);
+	float mg = blurred_octagon(p, blur, rotation);
+	float mb = blurred_octagon(p - ca, blur, rotation - 0.01);
+
+	vec3 shape = vec3(mr, mg, mb);
+
+	float core = exp(-r * r * 4.8) * source_core_intensity;
+	float ring_outer = octagon_mask(p, 0.72, 0.10 + blur * 0.04, rotation) * 0.06;
+	float edge_fade = 1.0 - smoothstep(0.88, 1.20 + blur * 0.08, r);
+
+	vec2 uv01 = p * 0.5 + 0.5;
+	float dirt = dirt_mask(uv01, imperfection);
+
+	vec3 col = shape * tint;
+	col += tint * (core + ring_outer);
+
+	return col * edge_fade * dirt * opacity;
+}
+
+vec3 source_glow(vec2 screen_uv, vec2 center_uv, float size, vec3 tint, float opacity) {
+	vec2 p = (screen_uv - center_uv) / max(size, 0.0001);
+	float r = length(p);
+
+	float disc = exp(-r * r * 2.0);
+	float veil = exp(-r * 1.8) * 0.35;
+
+	return tint * (disc + veil) * opacity;
+}
+
+vec3 flare_rays_pass(vec2 screen_uv, vec2 src_uv, float size, vec3 tint, float intensity, float rays, float length_scale) {
+	vec2 p = (screen_uv - src_uv) / max(size * length_scale, 0.0001);
+	float r = length(p);
+
+	if (r > 1.35) {
+		return vec3(0.0);
+	}
+
+	float a = atan(p.y, p.x);
+
+	float spokes_a = pow(max(0.0, cos(a * rays)), 22.0);
+	float spokes_b = pow(max(0.0, cos(a * (rays * 0.5) + 0.4)), 30.0) * 0.35;
+	float radial = exp(-r * 2.1);
+
+	float breakup = 1.0 + sin(a * 13.0 + r * 9.0) * 0.08 * imperfection;
+
+	return tint * (spokes_a + spokes_b) * radial * intensity * breakup;
+}
+
+void fragment() {
+	vec2 uv = SCREEN_UV;
+	vec2 screen_center = vec2(0.5, 0.5);
+	vec3 out_col = vec3(0.0);
+
+	for (int i = 0; i < MAX_FLARES; i++) {
+		if (i >= flare_count) {
+			break;
+		}
+
+		vec4 fd = flare_data[i];
+		vec4 ft = flare_tint[i];
+
+		vec2 src = fd.xy;
+		float size = fd.z;
+		float intensity = fd.w * master_intensity;
+
+		if (size <= 0.0 || intensity <= 0.0) {
+			continue;
+		}
+
+		vec3 tint = set_saturation(ft.rgb, flare_saturation);
+		vec2 axis_vec = screen_center - src;
+		float axis_len = length(axis_vec);
+		vec2 axis = axis_len > 0.00001 ? axis_vec / axis_len : vec2(1.0, 0.0);
+
+		float edge_boost = mix(0.82, 1.15, smoothstep(0.08, 0.95, axis_len));
+		float e = intensity * edge_boost;
+
+		float seed = hash21(src * 97.13);
+		float rot = (seed - 0.5) * 0.18;
+
+		// main source flare
+		out_col += source_glow(uv, src, size * source_bloom_scale * 1.55, tint, halo_intensity * e * 0.55);
+		out_col += octo_bokeh_sprite(
+			uv,
+			src,
+			size * source_bloom_scale,
+			axis,
+			tint,
+			blur_amount * 1.1,
+			chroma_amount,
+			rot,
+			halo_intensity * e
+		);
+
+		// subtle rays
+		out_col += flare_rays_pass(
+			uv,
+			src,
+			size * 1.8,
+			tint,
+			ray_intensity * e,
+			ray_count,
+			ray_length
+		);
+
+		// unreal-style ghost chain: soft, translucent, octagonal
+		vec2 g1 = src + (screen_center - src) * (0.24 * ghost_spread * ghost_nearness);
+		vec2 g2 = src + (screen_center - src) * (0.44 * ghost_spread * ghost_nearness);
+		vec2 g3 = src + (screen_center - src) * (0.66 * ghost_spread * ghost_nearness);
+		vec2 g4 = src + (screen_center - src) * (0.90 * ghost_spread * ghost_nearness);
+
+		vec3 ghost_tint_1 = set_saturation(tint * vec3(1.18, 0.92, 0.82), flare_saturation * ghost_color_boost);
+		vec3 ghost_tint_2 = set_saturation(tint * vec3(0.76, 1.18, 0.94), flare_saturation * ghost_color_boost);
+		vec3 ghost_tint_3 = set_saturation(tint * vec3(1.18, 0.78, 1.12), flare_saturation * ghost_color_boost);
+		vec3 ghost_tint_4 = set_saturation(tint * vec3(1.08, 0.98, 0.82), flare_saturation * ghost_color_boost);
+
+		out_col += octo_bokeh_sprite(
+			uv, g1, size * 0.19, axis,
+			ghost_tint_1,
+			blur_amount * 1.05, chroma_amount * 1.15, rot + 0.02,
+			ghost_intensity * e * 0.82 / ghost_opacity_falloff
+		);
+
+		out_col += octo_bokeh_sprite(
+			uv, g2, size * 0.13, axis,
+			ghost_tint_2,
+			blur_amount * 1.00, chroma_amount * 1.20, rot - 0.01,
+			ghost_intensity * e * 0.58 / ghost_opacity_falloff
+		);
+
+		out_col += octo_bokeh_sprite(
+			uv, g3, size * 0.10, axis,
+			ghost_tint_3,
+			blur_amount * 0.95, chroma_amount * 1.25, rot + 0.03,
+			ghost_intensity * e * 0.38 / ghost_opacity_falloff
+		);
+
+		out_col += octo_bokeh_sprite(
+			uv, g4, size * 0.14, axis,
+			ghost_tint_4,
+			blur_amount * 1.08, chroma_amount * 1.15, rot - 0.02,
+			ghost_intensity * e * 0.24 / ghost_opacity_falloff
+		);
+	}
+
+	COLOR = vec4(out_col, 1.0);
+}
