@@ -28,11 +28,16 @@ uniform float vignette_roundness : hint_range(0.25, 4.0, 0.01) = 1.0;
 
 // -------------------------
 // CHROMATIC ABERRATION
-// ca_blur adds a cheap soft blur to the fringe
+// Real lenses mostly show lateral CA toward the frame edges,
+// with green staying comparatively anchored and stronger fringing
+// only on high-contrast edges / bright transitions.
 // -------------------------
-uniform float chromatic_aberration : hint_range(0.0, 8.0, 0.01) = 1.2;
-uniform float ca_edge_start : hint_range(0.0, 1.0, 0.01) = 0.15;
-uniform float ca_blur : hint_range(0.0, 4.0, 0.01) = 0.65;
+uniform float chromatic_aberration : hint_range(0.0, 8.0, 0.01) = 1.6;
+uniform float ca_edge_start : hint_range(0.0, 1.0, 0.01) = 0.62;
+uniform float ca_blur : hint_range(0.0, 4.0, 0.01) = 0.85;
+uniform float ca_radial_power : hint_range(0.5, 4.0, 0.01) = 1.85;
+uniform float ca_edge_response : hint_range(0.25, 4.0, 0.01) = 1.35;
+uniform float ca_highlight_fringe : hint_range(0.0, 1.0, 0.01) = 0.22;
 
 // -------------------------
 // DISTORTION
@@ -97,6 +102,26 @@ uniform float halation_threshold : hint_range(0.0, 2.0, 0.01) = 1.0;
 uniform float halation_softness : hint_range(0.001, 2.0, 0.01) = 0.35;
 uniform float halation_radius : hint_range(0.0, 16.0, 0.01) = 5.5;
 uniform vec3 halation_color : source_color = vec3(1.0, 0.35, 0.12);
+uniform bool halation_depth_aware = true;
+uniform float halation_depth_reference : hint_range(0.1, 500.0, 0.01) = 8.0;
+uniform float halation_depth_curve : hint_range(0.1, 4.0, 0.01) = 1.0;
+uniform float halation_depth_min_scale : hint_range(0.05, 4.0, 0.01) = 0.45;
+uniform float halation_depth_max_scale : hint_range(0.05, 8.0, 0.01) = 2.2;
+uniform float halation_depth_rejection : hint_range(0.01, 10.0, 0.01) = 1.25;
+
+uniform sampler2D depth_texture : hint_depth_texture, repeat_disable, filter_linear_mipmap;
+
+uniform bool enable_post_dof = false;
+uniform float post_dof_amount : hint_range(0.0, 1.0, 0.01) = 0.1;
+uniform bool post_dof_near_enabled = false;
+uniform float post_dof_near_distance : hint_range(0.01, 100.0, 0.01) = 2.0;
+uniform float post_dof_near_transition : hint_range(0.001, 50.0, 0.01) = 1.0;
+uniform bool post_dof_far_enabled = true;
+uniform float post_dof_far_distance : hint_range(0.01, 500.0, 0.01) = 10.0;
+uniform float post_dof_far_transition : hint_range(0.001, 100.0, 0.01) = 5.0;
+uniform float post_dof_near_clip : hint_range(0.001, 10.0, 0.001) = 0.05;
+uniform float post_dof_far_clip : hint_range(1.0, 100000.0, 0.1) = 4000.0;
+
 
 // Helios-inspired veil + halo
 uniform float lens_flare_veil_intensity : hint_range(0.0, 3.0, 0.01) = 0.45;
@@ -151,6 +176,10 @@ uniform vec3 flare_magenta_tint : source_color = vec3(1.0, 0.72, 0.94);
 
 float luma(vec3 c) {
 	return dot(c, vec3(0.2126, 0.7152, 0.0722));
+}
+
+float max3(vec3 c) {
+	return max(c.r, max(c.g, c.b));
 }
 
 vec2 get_screen_pixel_size() {
@@ -241,7 +270,7 @@ vec3 digital_camera_rgb_noise(vec2 p, vec3 color_srgb) {
 }
 
 vec2 distort_uv(vec2 uv) {
-	if (!enable_distortion) {
+	if (enable_distortion) {
 		return uv;
 	}
 	
@@ -256,15 +285,36 @@ vec2 distort_uv(vec2 uv) {
 	return distortion_center + p * 0.5;
 }
 
-float edge_factor(vec2 uv) {
-	vec2 p = uv * 2.0 - 1.0;
-	float r = length(p);
-	return smoothstep(ca_edge_start, 1.0, r);
+float ca_radial_factor(vec2 uv) {
+	vec2 size_px = vec2(textureSize(screen_texture, 0));
+	float aspect = size_px.x / max(size_px.y, 0.0001);
+	vec2 p = uv - distortion_center;
+	p.x *= aspect;
+	float r = length(p) * 2.0;
+	float mask = smoothstep(ca_edge_start, 1.0, r);
+	return pow(clamp(mask, 0.0, 1.0), max(ca_radial_power, 0.0001));
 }
 
 vec3 sample_screen(vec2 uv) {
 	return textureLod(screen_texture, clamp(uv, vec2(0.0), vec2(1.0)), 0.0).rgb;
 }
+
+float ca_edge_mask(vec2 duv, vec2 radial_dir, vec2 tangent_dir) {
+	vec2 px = get_screen_pixel_size();
+	vec2 radial_step = radial_dir * px * 1.35;
+	vec2 tangent_step = tangent_dir * px * 1.10;
+
+	float lr_p = luma(sample_screen(duv + radial_step));
+	float lr_n = luma(sample_screen(duv - radial_step));
+	float lt_p = luma(sample_screen(duv + tangent_step));
+	float lt_n = luma(sample_screen(duv - tangent_step));
+
+	float grad = max(abs(lr_p - lr_n), abs(lt_p - lt_n));
+	float boosted = grad * (1.2 + ca_blur * 0.35) * ca_edge_response;
+	return smoothstep(0.02, 0.18, boosted);
+}
+
+
 
 vec3 sample_scene_base(vec2 uv) {
 	return sample_screen(distort_uv(uv));
@@ -272,40 +322,193 @@ vec3 sample_scene_base(vec2 uv) {
 
 vec3 sample_scene_ca(vec2 uv) {
 	vec2 duv = clamp(distort_uv(uv), vec2(0.0), vec2(1.0));
+	vec3 base = sample_screen(duv);
 
 	if (!enable_chromatic_aberration || chromatic_aberration <= 0.0001) {
-		return sample_screen(duv);
+		return base;
 	}
 
-	vec2 center_dir = uv - vec2(0.5);
-	float len_dir = length(center_dir);
-	vec2 dir = len_dir > 0.00001 ? center_dir / len_dir : vec2(0.0);
-	vec2 tangent = vec2(-dir.y, dir.x);
+	float radial = ca_radial_factor(uv);
+	if (radial <= 0.0001) {
+		return base;
+	}
 
-	float edge = edge_factor(uv);
+	vec2 size_px = vec2(textureSize(screen_texture, 0));
+	float aspect = size_px.x / max(size_px.y, 0.0001);
+	vec2 to_center = uv - distortion_center;
+	vec2 radial_metric = vec2(to_center.x * aspect, to_center.y);
+	float radial_len = length(radial_metric);
+	vec2 radial_dir = vec2(0.0);
+	if (radial_len > 0.00001) {
+		radial_dir = normalize(vec2(radial_metric.x / max(aspect, 0.0001), radial_metric.y));
+	}
+	vec2 tangent_dir = vec2(-radial_dir.y, radial_dir.x);
+
+	float edge_mask = ca_edge_mask(duv, radial_dir, tangent_dir);
+	float mask = radial * edge_mask;
+	if (mask <= 0.0001) {
+		return base;
+	}
+
 	vec2 px = get_screen_pixel_size();
-	vec2 base_offset = dir * px * chromatic_aberration * edge;
+	vec2 radial_offset = radial_dir * px * chromatic_aberration * mask;
+	vec2 tangential_smear = tangent_dir * px * ca_blur * mask * 0.22;
 
-	float blur_amt = max(ca_blur, 0.0);
-	vec2 blur_side = tangent * px * blur_amt * edge;
+	float highlight_mask = smoothstep(0.65, 1.15, max3(base)) * ca_highlight_fringe;
+	vec2 axial_offset = radial_dir * px * chromatic_aberration * highlight_mask * mask * 0.40;
 
-	float r0 = sample_screen(duv + base_offset * 0.75).r;
-	float r1 = sample_screen(duv + base_offset * 1.15 + blur_side).r;
-	float r2 = sample_screen(duv + base_offset * 1.55 - blur_side).r;
+	vec2 red_uv = duv + radial_offset * 0.55 + axial_offset * 0.40 + tangential_smear;
+	vec2 green_uv = duv - axial_offset * 0.22;
+	vec2 blue_uv = duv - radial_offset * 0.90 + axial_offset * 0.52 - tangential_smear;
 
-	float g0 = sample_screen(duv).g;
-	float g1 = sample_screen(duv + blur_side * 0.5).g;
-	float g2 = sample_screen(duv - blur_side * 0.5).g;
-
-	float b0 = sample_screen(duv - base_offset * 0.75).b;
-	float b1 = sample_screen(duv - base_offset * 1.15 + blur_side).b;
-	float b2 = sample_screen(duv - base_offset * 1.55 - blur_side).b;
-
-	return vec3(
-		(r0 + r1 + r2) / 3.0,
-		(g0 + g1 + g2) / 3.0,
-		(b0 + b1 + b2) / 3.0
+	vec3 ca_col = vec3(
+		sample_screen(red_uv).r,
+		sample_screen(green_uv).g,
+		sample_screen(blue_uv).b
 	);
+
+	return mix(base, ca_col, clamp(mask, 0.0, 1.0));
+}
+
+float get_view_depth(vec2 uv) {
+	vec2 duv = clamp(distort_uv(uv), vec2(0.0), vec2(1.0));
+	float depth = textureLod(depth_texture, duv, 0.0).r;
+	float z = depth * 2.0 - 1.0;
+
+	return (2.0 * post_dof_near_clip * post_dof_far_clip) /
+		max(
+			post_dof_far_clip + post_dof_near_clip - z * (post_dof_far_clip - post_dof_near_clip),
+			0.0001
+		);
+}
+
+float halation_highlight_weight(vec2 uv) {
+	vec3 c = sample_scene_base(uv);
+	float bright = max3(c);
+	float w = smoothstep(
+		halation_threshold,
+		halation_threshold + max(halation_softness, 0.0001),
+		bright
+	);
+
+	// Bias toward the brightest core so the radius follows the actual source
+	return w * w;
+}
+
+float get_halation_source_depth(vec2 uv) {
+	vec2 px = get_screen_pixel_size() * 1.5;
+
+	vec2 o0 = vec2(0.0, 0.0);
+	vec2 o1 = vec2( 1.0,  0.0) * px;
+	vec2 o2 = vec2(-1.0,  0.0) * px;
+	vec2 o3 = vec2( 0.0,  1.0) * px;
+	vec2 o4 = vec2( 0.0, -1.0) * px;
+	vec2 o5 = vec2( 0.7071,  0.7071) * px;
+	vec2 o6 = vec2(-0.7071,  0.7071) * px;
+	vec2 o7 = vec2( 0.7071, -0.7071) * px;
+	vec2 o8 = vec2(-0.7071, -0.7071) * px;
+
+	float best_w = 0.0;
+	float best_d = get_view_depth(uv);
+
+	#define HALATION_PICK(O, BOOST) { \
+		float w = halation_highlight_weight(uv + O) * BOOST; \
+		if (w > best_w) { \
+			best_w = w; \
+			best_d = get_view_depth(uv + O); \
+		} \
+	}
+
+	HALATION_PICK(o0, 2.0)
+	HALATION_PICK(o1, 1.0)
+	HALATION_PICK(o2, 1.0)
+	HALATION_PICK(o3, 1.0)
+	HALATION_PICK(o4, 1.0)
+	HALATION_PICK(o5, 0.85)
+	HALATION_PICK(o6, 0.85)
+	HALATION_PICK(o7, 0.85)
+	HALATION_PICK(o8, 0.85)
+
+	#undef HALATION_PICK
+
+	return best_d;
+}
+
+float get_halation_radius_px(vec2 uv) {
+	float radius_px = halation_radius;
+
+	if (!halation_depth_aware || radius_px <= 0.0001) {
+		return radius_px;
+	}
+
+	float source_depth = max(get_halation_source_depth(uv), 0.0001);
+	float ref_depth = max(halation_depth_reference, 0.0001);
+
+	// Inverse depth scaling: farther source = smaller screen-space bleed,
+	// closer source = larger screen-space bleed.
+	float scale = pow(ref_depth / source_depth, halation_depth_curve);
+	scale = clamp(scale, halation_depth_min_scale, halation_depth_max_scale);
+
+	return radius_px * scale;
+}
+
+float get_post_dof_mask(float view_depth) {
+	float coc = 0.0;
+
+	if (post_dof_near_enabled) {
+		float near_delta = post_dof_near_distance - view_depth;
+		coc = max(coc, smoothstep(0.0, max(post_dof_near_transition, 0.0001), near_delta));
+	}
+
+	if (post_dof_far_enabled) {
+		float far_delta = view_depth - post_dof_far_distance;
+		coc = max(coc, smoothstep(0.0, max(post_dof_far_transition, 0.0001), far_delta));
+	}
+
+	return clamp(coc * post_dof_amount, 0.0, 1.0);
+}
+
+vec3 apply_post_dof(vec2 uv, vec3 center_color) {
+	if (!enable_post_dof || post_dof_amount <= 0.0001) {
+		return center_color;
+	}
+
+	if (!post_dof_near_enabled && !post_dof_far_enabled) {
+		return center_color;
+	}
+
+	float view_depth = get_view_depth(uv);
+	float blur_mask = get_post_dof_mask(view_depth);
+
+	if (blur_mask <= 0.001) {
+		return center_color;
+	}
+
+	vec2 px = get_screen_pixel_size();
+	float radius_px = mix(0.0, 8.0, blur_mask);
+
+	vec2 o1 = vec2( 1.0,  0.0) * px * radius_px;
+	vec2 o2 = vec2(-1.0,  0.0) * px * radius_px;
+	vec2 o3 = vec2( 0.0,  1.0) * px * radius_px;
+	vec2 o4 = vec2( 0.0, -1.0) * px * radius_px;
+	vec2 o5 = vec2( 0.7071,  0.7071) * px * radius_px;
+	vec2 o6 = vec2(-0.7071,  0.7071) * px * radius_px;
+	vec2 o7 = vec2( 0.7071, -0.7071) * px * radius_px;
+	vec2 o8 = vec2(-0.7071, -0.7071) * px * radius_px;
+
+	vec3 acc = center_color * 2.0;
+	float w = 2.0;
+
+	acc += sample_scene_ca(uv + o1); w += 1.0;
+	acc += sample_scene_ca(uv + o2); w += 1.0;
+	acc += sample_scene_ca(uv + o3); w += 1.0;
+	acc += sample_scene_ca(uv + o4); w += 1.0;
+	acc += sample_scene_ca(uv + o5); w += 0.85;
+	acc += sample_scene_ca(uv + o6); w += 0.85;
+	acc += sample_scene_ca(uv + o7); w += 0.85;
+	acc += sample_scene_ca(uv + o8); w += 0.85;
+
+	return mix(center_color, acc / max(w, 0.0001), blur_mask);
 }
 
 vec3 threshold_color(vec3 c, float threshold, float softness) {
@@ -350,6 +553,59 @@ vec3 blur_highlights(vec2 uv, float radius_px, float threshold, float softness) 
 	return acc / max(w, 0.0001);
 }
 
+vec3 blur_highlights_depth_aware(
+	vec2 uv,
+	float radius_px,
+	float threshold,
+	float softness,
+	float source_depth
+) {
+	vec2 px = get_screen_pixel_size() * radius_px;
+
+	vec3 acc = vec3(0.0);
+	float w = 0.0;
+
+	vec2 o0  = vec2(0.0, 0.0);
+	vec2 o1  = vec2( 1.0,  0.0) * px;
+	vec2 o2  = vec2(-1.0,  0.0) * px;
+	vec2 o3  = vec2( 0.0,  1.0) * px;
+	vec2 o4  = vec2( 0.0, -1.0) * px;
+	vec2 o5  = vec2( 0.7071,  0.7071) * px * 1.4;
+	vec2 o6  = vec2(-0.7071,  0.7071) * px * 1.4;
+	vec2 o7  = vec2( 0.7071, -0.7071) * px * 1.4;
+	vec2 o8  = vec2(-0.7071, -0.7071) * px * 1.4;
+	vec2 o9  = vec2( 2.0,  0.0) * px;
+	vec2 o10 = vec2(-2.0,  0.0) * px;
+	vec2 o11 = vec2( 0.0,  2.0) * px;
+	vec2 o12 = vec2( 0.0, -2.0) * px;
+
+	#define HALATION_ACCUM(O, BASE_W) { \
+		float d = get_view_depth(uv + O); \
+		float dw = 1.0 - smoothstep(0.0, max(halation_depth_rejection, 0.0001), abs(d - source_depth)); \
+		float ww = BASE_W * dw; \
+		acc += threshold_color(sample_scene_base(uv + O), threshold, softness) * ww; \
+		w += ww; \
+	}
+
+	HALATION_ACCUM(o0,  2.0)
+	HALATION_ACCUM(o1,  1.0)
+	HALATION_ACCUM(o2,  1.0)
+	HALATION_ACCUM(o3,  1.0)
+	HALATION_ACCUM(o4,  1.0)
+	HALATION_ACCUM(o5,  1.0)
+	HALATION_ACCUM(o6,  1.0)
+	HALATION_ACCUM(o7,  1.0)
+	HALATION_ACCUM(o8,  1.0)
+	HALATION_ACCUM(o9,  0.75)
+	HALATION_ACCUM(o10, 0.75)
+	HALATION_ACCUM(o11, 0.75)
+	HALATION_ACCUM(o12, 0.75)
+
+	#undef HALATION_ACCUM
+
+	return acc / max(w, 0.0001);
+}
+
 vec3 highlight_bloom_pass(vec2 uv) {
 	if (!enable_highlight_bloom || bloom_intensity <= 0.0001 || bloom_radius <= 0.0001) {
 		return vec3(0.0);
@@ -368,8 +624,24 @@ vec3 halation_pass(vec2 uv) {
 		return vec3(0.0);
 	}
 
-	vec3 inner = blur_highlights(uv, max(1.0, halation_radius * 0.45), halation_threshold, halation_softness);
-	vec3 outer = blur_highlights(uv, max(1.0, halation_radius), halation_threshold, halation_softness);
+	float source_depth = get_halation_source_depth(uv);
+	float radius_px = max(1.0, get_halation_radius_px(uv));
+
+	vec3 inner = blur_highlights_depth_aware(
+		uv,
+		max(1.0, radius_px * 0.45),
+		halation_threshold,
+		halation_softness,
+		source_depth
+	);
+
+	vec3 outer = blur_highlights_depth_aware(
+		uv,
+		radius_px,
+		halation_threshold,
+		halation_softness,
+		source_depth
+	);
 
 	vec3 ring = max(outer - inner * 0.7, vec3(0.0));
 	return ring * halation_color * halation_intensity;
@@ -669,6 +941,7 @@ void fragment() {
 	vec2 uv = SCREEN_UV;
 
 	vec3 color = sample_scene_ca(uv);
+	color = apply_post_dof(uv, color);
 
 	vec3 bloom = highlight_bloom_pass(uv);
 	vec3 halation = halation_pass(uv);

@@ -34,15 +34,18 @@ const DEFAULT_FLARE_SHADER_PATH: String = "res://addons/EpicCameraX/shaders/ue_l
 
 @export_group("Chromatic Aberration")
 @export var enable_chromatic_aberration: bool = true
-@export_range(0.0, 8.0, 0.01) var chromatic_aberration: float = 2.85
-@export_range(0.0, 1.0, 0.01) var ca_edge_start: float = 0.55
-@export_range(0.0, 4.0, 0.01) var ca_blur: float = 2.55
+@export_range(0.0, 8.0, 0.01) var chromatic_aberration: float = 2.0
+@export_range(0.0, 1.0, 0.01) var ca_edge_start: float = 0.62
+@export_range(0.0, 4.0, 0.01) var ca_blur: float = 3.0
+@export_range(0.5, 4.0, 0.01) var ca_radial_power: float = 1.88
+@export_range(0.25, 4.0, 0.01) var ca_edge_response: float = 1.35
+@export_range(0.0, 1.0, 0.01) var ca_highlight_fringe: float = 0.50
 
 @export_group("Lens Distortion")
 @export var enable_distortion: bool = true
 @export_range(-1.0, 1.0, 0.001) var distortion: float = 0.035
 @export_range(-1.0, 1.0, 0.001) var distortion_cubic: float = 0.015
-@export_range(1.0, 2.0, 0.001) var distortion_overscan: float = 1.08
+@export_range(1.0, 2.0, 0.001) var distortion_overscan: float = 1.11
 @export var distortion_center: Vector2 = Vector2(0.5, 0.5)
 
 @export_group("Film Grain")
@@ -56,20 +59,26 @@ const DEFAULT_FLARE_SHADER_PATH: String = "res://addons/EpicCameraX/shaders/ue_l
 @export_range(0.0, 4.0, 0.01) var grain_highlights: float = 3.0
 
 @export_group("Highlight Bloom")
-@export var enable_highlight_bloom: bool = true
-@export_range(0.0, 3.0, 0.01) var bloom_intensity: float = 0.35
-@export_range(0.0, 2.0, 0.01) var bloom_threshold: float = 1.0
-@export_range(0.001, 2.0, 0.01) var bloom_softness: float = 0.35
-@export_range(0.0, 12.0, 0.01) var bloom_radius: float = 4.0
+@export var enable_highlight_bloom: bool = false
+@export_range(0.0, 3.0, 0.01) var bloom_intensity: float = 0.13
+@export_range(0.0, 2.0, 0.01) var bloom_threshold: float = 0.72
+@export_range(0.001, 2.0, 0.01) var bloom_softness: float = 0.57
+@export_range(0.0, 12.0, 0.01) var bloom_radius: float = 1.31
 @export var bloom_tint: Color = Color(1, 1, 1, 1)
 
 @export_group("Halation")
 @export var enable_halation: bool = true
-@export_range(0.0, 3.0, 0.01) var halation_intensity: float = 0.80
-@export_range(0.0, 2.0, 0.01) var halation_threshold: float = 1.0
-@export_range(0.001, 2.0, 0.01) var halation_softness: float = 0.25
-@export_range(0.0, 16.0, 0.01) var halation_radius: float = 6.1
-@export var halation_color: Color = Color(1.0, 0.35, 0.12, 1.0)
+@export_range(0.0, 3.0, 0.01) var halation_intensity: float = 1.2
+@export_range(0.0, 2.0, 0.01) var halation_threshold: float = 0.35
+@export_range(0.001, 2.0, 0.01) var halation_softness: float = 0.45
+@export_range(0.0, 16.0, 0.01) var halation_radius: float = 1.8
+@export var halation_color: Color = Color("f54300")
+@export var halation_depth_aware: bool = true
+@export_range(0.1, 500.0, 0.01) var halation_depth_reference: float = 8.0
+@export_range(0.1, 4.0, 0.01) var halation_depth_curve: float = 4.0
+@export_range(0.05, 4.0, 0.01) var halation_depth_min_scale: float = 0.05
+@export_range(0.05, 8.0, 0.01) var halation_depth_max_scale: float = 098
+@export_range(0.01, 10.0, 0.01) var halation_depth_rejection: float = 1.25
 
 @export_group("Color Grading")
 @export var enable_color_grading: bool = true
@@ -89,13 +98,13 @@ const DEFAULT_FLARE_SHADER_PATH: String = "res://addons/EpicCameraX/shaders/ue_l
 @export_range(0.0, 1.0, 0.01) var lut_strength: float = 1.0
 
 @export_group("Engine DOF")
-@export var dof_enabled: bool = false
-@export_range(0.0, 1.0, 0.01) var dof_blur_amount: float = 0.1
+@export var dof_enabled: bool = true
+@export_range(0.0, 1.0, 0.01) var dof_blur_amount: float = 0.02
 @export var dof_near_enabled: bool = false
 @export_range(0.01, 100.0, 0.01) var dof_near_distance: float = 2.0
 @export_range(-20.0, 20.0, 0.01) var dof_near_transition: float = 1.0
 @export var dof_far_enabled: bool = true
-@export_range(0.01, 500.0, 0.01) var dof_far_distance: float = 10.0
+@export_range(0.01, 500.0, 0.01) var dof_far_distance: float = 85.0
 @export_range(-50.0, 50.0, 0.01) var dof_far_transition: float = 5.0
 
 @export_group("Light Selection")
@@ -111,10 +120,10 @@ const DEFAULT_FLARE_SHADER_PATH: String = "res://addons/EpicCameraX/shaders/ue_l
 @export_flags_3d_physics var occlusion_mask: int = 1
 
 @export_group("Flare Look")
-@export_range(0.0, 8.0, 0.01) var master_intensity: float = 0.2
+@export_range(0.0, 8.0, 0.01) var master_intensity: float = 0.21
 @export_range(0.0, 8.0, 0.01) var blur_amount: float = 1.80
 @export_range(0.0, 0.05, 0.0001) var chroma_amount: float = 0.02
-@export_range(0.0, 4.0, 0.01) var halo_intensity: float = 0.0
+@export_range(0.0, 4.0, 0.01) var halo_intensity: float = 0.15
 @export_range(0.0, 4.0, 0.01) var ghost_intensity: float = 2.3
 @export_range(0.0, 4.0, 0.01) var ray_intensity: float = 0.0
 @export_range(0.0, 1.0, 0.01) var imperfection: float = 0.38
@@ -135,9 +144,26 @@ const DEFAULT_FLARE_SHADER_PATH: String = "res://addons/EpicCameraX/shaders/ue_l
 @export_range(0.0, 8.0, 0.01) var sun_intensity_multiplier: float = 1.80
 @export_range(0.1, 4.0, 0.01) var sun_size_multiplier: float = 3.0
 
+@export_group("Flare: Source Visibility")
+@export var enable_source_visibility_gating: bool = true
+@export_range(0.0, 1.0, 0.01) var light_source_visibility_gate: float = 0.20
+@export_range(0.0, 1.0, 0.01) var emissive_source_visibility_gate: float = 0.85
+@export_range(0.0, 1.0, 0.01) var sun_source_visibility_gate: float = 1.0
+@export_range(0.0, 2.0, 0.01) var source_visibility_threshold: float = 0.65
+@export_range(0.001, 1.0, 0.01) var source_visibility_softness: float = 0.18
+@export_range(0.0, 0.05, 0.0005) var source_visibility_sample_radius: float = 0.006
+
+@export_group("Flare: Allowed Area")
+@export var enable_center_safe_zone: bool = true
+@export_range(0.0, 0.8, 0.001) var flare_allowed_area_radius_scale: float = 0.55
+@export_range(0.0, 0.6, 0.001) var flare_center_dead_zone_scale: float = 0.114
+@export_range(0.0, 0.2, 0.001) var flare_allowed_area_feather: float = 0.15
+
 @export_group("Flare: Emissive Sources")
 @export var include_emissive_meshes: bool = true
 @export_range(0.0, 100.0, 0.01) var emissive_threshold: float = 1.0
+@export_range(0.0, 4.0, 0.01) var emissive_flare_intensity_scale: float = 0.72
+@export_range(0.1, 4.0, 0.01) var emissive_flare_size_scale: float = 0.9
 
 @export_group("Flare: Bokeh")
 @export var use_bokeh_texture: bool = true
@@ -379,6 +405,9 @@ func _apply_params() -> void:
 	_post_mat.set_shader_parameter("chromatic_aberration", chromatic_aberration)
 	_post_mat.set_shader_parameter("ca_edge_start", ca_edge_start)
 	_post_mat.set_shader_parameter("ca_blur", ca_blur)
+	_post_mat.set_shader_parameter("ca_radial_power", ca_radial_power)
+	_post_mat.set_shader_parameter("ca_edge_response", ca_edge_response)
+	_post_mat.set_shader_parameter("ca_highlight_fringe", ca_highlight_fringe)
 
 	_post_mat.set_shader_parameter("distortion", distortion)
 	_post_mat.set_shader_parameter("distortion_cubic", distortion_cubic)
@@ -407,6 +436,25 @@ func _apply_params() -> void:
 	_post_mat.set_shader_parameter("halation_radius", halation_radius)
 	_post_mat.set_shader_parameter("halation_color", Vector3(halation_color.r, halation_color.g, halation_color.b))
 
+	_post_mat.set_shader_parameter("halation_depth_aware", halation_depth_aware)
+	_post_mat.set_shader_parameter("halation_depth_reference", halation_depth_reference)
+	_post_mat.set_shader_parameter("halation_depth_curve", halation_depth_curve)
+	_post_mat.set_shader_parameter("halation_depth_min_scale", halation_depth_min_scale)
+	_post_mat.set_shader_parameter("halation_depth_max_scale", halation_depth_max_scale)
+	_post_mat.set_shader_parameter("halation_depth_rejection", halation_depth_rejection)
+
+	_post_mat.set_shader_parameter("enable_post_dof", dof_enabled)
+	_post_mat.set_shader_parameter("post_dof_amount", dof_blur_amount)
+	_post_mat.set_shader_parameter("post_dof_near_enabled", dof_near_enabled)
+	_post_mat.set_shader_parameter("post_dof_near_distance", dof_near_distance)
+	_post_mat.set_shader_parameter("post_dof_near_transition", max(abs(dof_near_transition), 0.001))
+	_post_mat.set_shader_parameter("post_dof_far_enabled", dof_far_enabled)
+	_post_mat.set_shader_parameter("post_dof_far_distance", dof_far_distance)
+	_post_mat.set_shader_parameter("post_dof_far_transition", max(abs(dof_far_transition), 0.001))
+
+	if is_instance_valid(_camera):
+		_post_mat.set_shader_parameter("post_dof_near_clip", _camera.near)
+		_post_mat.set_shader_parameter("post_dof_far_clip", _camera.far)
 	_post_mat.set_shader_parameter("exposure", exposure)
 	_post_mat.set_shader_parameter("contrast", contrast)
 	_post_mat.set_shader_parameter("saturation", saturation)
@@ -433,21 +481,24 @@ func _apply_engine_dof() -> void:
 		attrs = CameraAttributesPractical.new()
 		_camera.attributes = attrs
 
-	if !dof_enabled:
+	# Engine DOF happens on the camera render path.
+	# Our custom lens distortion happens later on the fullscreen quad.
+	# So when distortion is enabled, disable engine DOF and let the shader do it after distortion.
+	var use_engine_dof: bool = dof_enabled and !enable_distortion
+
+	if !use_engine_dof:
 		attrs.dof_blur_near_enabled = false
 		attrs.dof_blur_far_enabled = false
 		return
 
 	attrs.dof_blur_amount = dof_blur_amount
-
 	attrs.dof_blur_near_enabled = dof_near_enabled
 	attrs.dof_blur_near_distance = dof_near_distance
 	attrs.dof_blur_near_transition = dof_near_transition
-
 	attrs.dof_blur_far_enabled = dof_far_enabled
 	attrs.dof_blur_far_distance = dof_far_distance
 	attrs.dof_blur_far_transition = dof_far_transition
-
+	
 func _ensure_overlay() -> void:
 	if _canvas_layer == null or !is_instance_valid(_canvas_layer):
 		_canvas_layer = get_node_or_null(FLARE_LAYER_NAME)
@@ -589,6 +640,14 @@ func _apply_static_shader_params() -> void:
 	_flare_mat.set_shader_parameter("source_core_intensity", 0.35)
 	_flare_mat.set_shader_parameter("ghost_nearness", 1.0)
 	_flare_mat.set_shader_parameter("ghost_color_boost", 1.25)
+	_flare_mat.set_shader_parameter("enable_source_visibility_gating", enable_source_visibility_gating)
+	_flare_mat.set_shader_parameter("source_visibility_threshold", source_visibility_threshold)
+	_flare_mat.set_shader_parameter("source_visibility_softness", source_visibility_softness)
+	_flare_mat.set_shader_parameter("source_visibility_sample_radius", source_visibility_sample_radius)
+	_flare_mat.set_shader_parameter("enable_center_safe_zone", enable_center_safe_zone)
+	_flare_mat.set_shader_parameter("allowed_flare_area_radius_scale", flare_allowed_area_radius_scale)
+	_flare_mat.set_shader_parameter("center_dead_zone_radius_scale", flare_center_dead_zone_scale)
+	_flare_mat.set_shader_parameter("allowed_flare_area_feather", flare_allowed_area_feather)
 
 func _source_key_for_light(light: Light3D) -> String:
 	return "light_%s" % str(light.get_instance_id())
@@ -683,7 +742,7 @@ func _update_flare_uniforms(delta: float) -> void:
 			"uv": uv,
 			"size": size,
 			"intensity": intensity,
-			"tint": Vector4(c.r, c.g, c.b, 1.0)
+			"tint": Vector4(c.r, c.g, c.b, light_source_visibility_gate if enable_source_visibility_gating else 0.0)
 		}
 
 	# Emissive meshes
@@ -719,15 +778,15 @@ func _update_flare_uniforms(delta: float) -> void:
 		var dist_factor: float = float(clamp(1.0 / pow(max(dist, 1.0) / 12.0, distance_falloff), 0.18, 1.0))
 		var strength_norm: float = float(max(strength - emissive_threshold, 0.0))
 
-		var intensity: float = float(clamp(0.30 + strength_norm * 0.22, 0.0, 8.0)) * dist_factor * master_intensity * presence
-		var size: float = float(base_flare_size * (0.85 + strength_norm * 0.07))
+		var intensity: float = float(clamp(0.30 + strength_norm * 0.22, 0.0, 8.0)) * dist_factor * master_intensity * presence * emissive_flare_intensity_scale
+		var size: float = float(base_flare_size * (0.85 + strength_norm * 0.07) * emissive_flare_size_scale)
 		var c: Color = em["color"]
 
 		raw_sources[_source_key_for_emissive(mesh_instance)] = {
 			"uv": uv,
 			"size": size,
 			"intensity": intensity,
-			"tint": Vector4(c.r, c.g, c.b, 1.0)
+			"tint": Vector4(c.r, c.g, c.b, emissive_source_visibility_gate if enable_source_visibility_gating else 0.0)
 		}
 
 	# Sun flare
@@ -750,7 +809,7 @@ func _update_flare_uniforms(delta: float) -> void:
 					"uv": uv,
 					"size": size,
 					"intensity": intensity,
-					"tint": Vector4(c.r, c.g, c.b, 1.0)
+					"tint": Vector4(c.r, c.g, c.b, sun_source_visibility_gate if enable_source_visibility_gating else 0.0)
 				}
 
 	# Temporal smoothing + fade-out memory

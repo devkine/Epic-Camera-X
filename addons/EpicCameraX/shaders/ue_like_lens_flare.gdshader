@@ -5,11 +5,26 @@ const int MAX_FLARES = 12;
 
 uniform int flare_count = 0;
 uniform vec4 flare_data[MAX_FLARES]; // x=uv.x, y=uv.y, z=size, w=intensity
-uniform vec4 flare_tint[MAX_FLARES]; // rgb=tint
+uniform vec4 flare_tint[MAX_FLARES]; // rgb=tint, a=screen-space visibility gate strength
+
+uniform sampler2D scene_color_tex : hint_screen_texture, repeat_disable, filter_linear_mipmap;
 
 // kept only so your script does not break if it still sets them
 uniform sampler2D bokeh_texture : source_color, repeat_disable, filter_linear;
 uniform bool use_bokeh_texture = false;
+
+// screen-space source gating
+uniform bool enable_source_visibility_gating = true;
+uniform float source_visibility_threshold : hint_range(0.0, 2.0, 0.01) = 0.65;
+uniform float source_visibility_softness : hint_range(0.001, 1.0, 0.01) = 0.18;
+uniform float source_visibility_sample_radius : hint_range(0.0, 0.05, 0.0005) = 0.006;
+
+// central safe area for ghost flares: allow a ring around the optical center,
+// but avoid landing perfectly centered unless the user disables it.
+uniform bool enable_center_safe_zone = true;
+uniform float allowed_flare_area_radius_scale : hint_range(0.0, 0.8, 0.001) = 0.26;
+uniform float center_dead_zone_radius_scale : hint_range(0.0, 0.6, 0.001) = 0.10;
+uniform float allowed_flare_area_feather : hint_range(0.0, 0.2, 0.001) = 0.025;
 
 // existing script-driven controls
 uniform float master_intensity : hint_range(0.0, 8.0, 0.01) = 1.0;
@@ -47,6 +62,92 @@ float hash21(vec2 p) {
 vec3 set_saturation(vec3 c, float s) {
 	float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
 	return mix(vec3(l), c, s);
+}
+
+float sample_scene_brightness(vec2 uv) {
+	vec3 c = textureLod(scene_color_tex, clamp(uv, vec2(0.0), vec2(1.0)), 0.0).rgb;
+	return max(max(c.r, c.g), c.b);
+}
+
+float screen_aspect() {
+	ivec2 tex_size_i = textureSize(scene_color_tex, 0);
+	vec2 tex_size = vec2(tex_size_i);
+	return tex_size.y > 0.0 ? (tex_size.x / tex_size.y) : 1.0;
+}
+
+vec2 uv_to_center_space(vec2 uv) {
+	vec2 p = uv - vec2(0.5);
+	p.x *= screen_aspect();
+	return p;
+}
+
+vec2 center_space_to_uv(vec2 p) {
+	p.x /= max(screen_aspect(), 0.0001);
+	return p + vec2(0.5);
+}
+
+float flare_allowed_area_visibility(vec2 flare_uv) {
+	if (!enable_center_safe_zone) {
+		return 1.0;
+	}
+
+	float outer_radius = max(allowed_flare_area_radius_scale, 0.0);
+	float inner_radius = clamp(center_dead_zone_radius_scale, 0.0, outer_radius);
+	vec2 p = uv_to_center_space(flare_uv);
+	float d = length(p);
+	float feather = max(allowed_flare_area_feather, 0.0001);
+
+	float outer_vis = 1.0;
+	if (outer_radius > 0.0001) {
+		outer_vis = 1.0 - smoothstep(outer_radius, outer_radius + feather, d);
+	}
+
+	float inner_vis = 1.0;
+	if (inner_radius > 0.0001) {
+		inner_vis = smoothstep(max(inner_radius - feather, 0.0), inner_radius, d);
+	}
+
+	return inner_vis * outer_vis;
+}
+
+float source_visibility(vec2 src_uv, float size, float gate_strength) {
+	if (!enable_source_visibility_gating || gate_strength <= 0.0001) {
+		return 1.0;
+	}
+
+	float radius = max(source_visibility_sample_radius, size * 0.22);
+	vec2 ox = vec2(radius, 0.0);
+	vec2 oy = vec2(0.0, radius);
+	vec2 od = vec2(radius * 0.70710678, radius * 0.70710678);
+
+	float center = sample_scene_brightness(src_uv);
+	float ring = 0.0;
+	ring += sample_scene_brightness(src_uv + ox);
+	ring += sample_scene_brightness(src_uv - ox);
+	ring += sample_scene_brightness(src_uv + oy);
+	ring += sample_scene_brightness(src_uv - oy);
+	ring += sample_scene_brightness(src_uv + od);
+	ring += sample_scene_brightness(src_uv - od);
+	ring += sample_scene_brightness(src_uv + vec2( od.x, -od.y));
+	ring += sample_scene_brightness(src_uv + vec2(-od.x,  od.y));
+	ring *= 0.125;
+
+	float core = smoothstep(
+		max(0.0, source_visibility_threshold - source_visibility_softness),
+		source_visibility_threshold + source_visibility_softness,
+		center
+	);
+
+	float support = smoothstep(
+		max(0.0, source_visibility_threshold * 0.75 - source_visibility_softness),
+		source_visibility_threshold * 0.75 + source_visibility_softness,
+		ring
+	);
+
+	float vis = core * mix(0.75, 1.0, support);
+	vis = pow(clamp(vis, 0.0, 1.0), mix(1.0, 2.4, clamp(gate_strength, 0.0, 1.0)));
+
+	return mix(1.0, vis, clamp(gate_strength, 0.0, 1.0));
 }
 
 // soft octagon aperture mask
@@ -170,6 +271,13 @@ void fragment() {
 			continue;
 		}
 
+		float source_vis = source_visibility(src, size, ft.a);
+		if (source_vis <= 0.001) {
+			continue;
+		}
+
+		intensity *= source_vis;
+
 		vec3 tint = set_saturation(ft.rgb, flare_saturation);
 		vec2 axis_vec = screen_center - src;
 		float axis_len = length(axis_vec);
@@ -207,10 +315,20 @@ void fragment() {
 		);
 
 		// unreal-style ghost chain: soft, translucent, octagonal
-		vec2 g1 = src + (screen_center - src) * (0.24 * ghost_spread * ghost_nearness);
-		vec2 g2 = src + (screen_center - src) * (0.44 * ghost_spread * ghost_nearness);
-		vec2 g3 = src + (screen_center - src) * (0.66 * ghost_spread * ghost_nearness);
-		vec2 g4 = src + (screen_center - src) * (0.90 * ghost_spread * ghost_nearness);
+		vec2 g1_raw = src + (screen_center - src) * (0.24 * ghost_spread * ghost_nearness);
+		vec2 g2_raw = src + (screen_center - src) * (0.44 * ghost_spread * ghost_nearness);
+		vec2 g3_raw = src + (screen_center - src) * (0.66 * ghost_spread * ghost_nearness);
+		vec2 g4_raw = src + (screen_center - src) * (0.90 * ghost_spread * ghost_nearness);
+
+		vec2 g1 = g1_raw;
+		vec2 g2 = g2_raw;
+		vec2 g3 = g3_raw;
+		vec2 g4 = g4_raw;
+
+		float g1_vis = flare_allowed_area_visibility(g1);
+		float g2_vis = flare_allowed_area_visibility(g2);
+		float g3_vis = flare_allowed_area_visibility(g3);
+		float g4_vis = flare_allowed_area_visibility(g4);
 
 		vec3 ghost_tint_1 = set_saturation(tint * vec3(1.18, 0.92, 0.82), flare_saturation * ghost_color_boost);
 		vec3 ghost_tint_2 = set_saturation(tint * vec3(0.76, 1.18, 0.94), flare_saturation * ghost_color_boost);
@@ -221,28 +339,28 @@ void fragment() {
 			uv, g1, size * 0.19, axis,
 			ghost_tint_1,
 			blur_amount * 1.05, chroma_amount * 1.15, rot + 0.02,
-			ghost_intensity * e * 0.82 / ghost_opacity_falloff
+			ghost_intensity * e * 0.82 * g1_vis / ghost_opacity_falloff
 		);
 
 		out_col += octo_bokeh_sprite(
 			uv, g2, size * 0.13, axis,
 			ghost_tint_2,
 			blur_amount * 1.00, chroma_amount * 1.20, rot - 0.01,
-			ghost_intensity * e * 0.58 / ghost_opacity_falloff
+			ghost_intensity * e * 0.58 * g2_vis / ghost_opacity_falloff
 		);
 
 		out_col += octo_bokeh_sprite(
 			uv, g3, size * 0.10, axis,
 			ghost_tint_3,
 			blur_amount * 0.95, chroma_amount * 1.25, rot + 0.03,
-			ghost_intensity * e * 0.38 / ghost_opacity_falloff
+			ghost_intensity * e * 0.38 * g3_vis / ghost_opacity_falloff
 		);
 
 		out_col += octo_bokeh_sprite(
 			uv, g4, size * 0.14, axis,
 			ghost_tint_4,
 			blur_amount * 1.08, chroma_amount * 1.15, rot - 0.02,
-			ghost_intensity * e * 0.24 / ghost_opacity_falloff
+			ghost_intensity * e * 0.24 * g4_vis / ghost_opacity_falloff
 		);
 	}
 

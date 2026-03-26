@@ -1,9 +1,9 @@
 [gd_scene format=4 uid="uid://bqwtcd5feuj0h"]
 
 [ext_resource type="Script" uid="uid://csesv6po566aq" path="res://addons/EpicCameraX/examples/flycamera_viewport.gd" id="1_l2eot"]
-[ext_resource type="Shader" path="res://addons/EpicCameraX/shaders/real_camera_post_fx.gdshader" id="2_1b68x"]
+[ext_resource type="Shader" uid="uid://b0u6nkuvgocv7" path="res://addons/EpicCameraX/shaders/real_camera_post_fx.gdshader" id="2_1b68x"]
 [ext_resource type="PackedScene" path="res://addons/EpicCameraX/scenes/post_processing_node.tscn" id="3_pr8hv"]
-[ext_resource type="Shader" path="res://addons/EpicCameraX/shaders/ue_like_lens_flare.gdshader" id="4_tk2wq"]
+[ext_resource type="Shader" uid="uid://brxt4bsy2mhv6" path="res://addons/EpicCameraX/shaders/ue_like_lens_flare.gdshader" id="4_tk2wq"]
 
 [sub_resource type="PhysicalSkyMaterial" id="PhysicalSkyMaterial_3h184"]
 mie_eccentricity = 0.99
@@ -22,6 +22,7 @@ ssr_enabled = true
 ssao_enabled = true
 ssil_enabled = true
 glow_enabled = true
+glow_normalized = true
 volumetric_fog_enabled = true
 volumetric_fog_density = 0.002
 volumetric_fog_emission_energy = 5.0
@@ -32,28 +33,34 @@ volumetric_fog_sky_affect = 0.798
 [sub_resource type="CameraAttributesPhysical" id="CameraAttributesPhysical_a0tk4"]
 
 [sub_resource type="CameraAttributesPractical" id="CameraAttributesPractical_p7lbm"]
+dof_blur_far_enabled = true
+dof_blur_far_distance = 85.0
+dof_blur_amount = 0.02
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_a2rhk"]
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_vqley"]
 render_priority = 0
 shader = ExtResource("2_1b68x")
 shader_parameter/enable_vignette = true
 shader_parameter/enable_chromatic_aberration = true
-shader_parameter/enable_distortion = true
+shader_parameter/enable_distortion = false
 shader_parameter/enable_grain = true
 shader_parameter/enable_color_grading = true
-shader_parameter/enable_highlight_bloom = true
+shader_parameter/enable_highlight_bloom = false
 shader_parameter/enable_lut = false
 shader_parameter/enable_halation = true
 shader_parameter/vignette_intensity = 0.2
 shader_parameter/vignette_size = 1.0
 shader_parameter/vignette_smoothness = 1.0
 shader_parameter/vignette_roundness = 1.0
-shader_parameter/chromatic_aberration = 2.85
-shader_parameter/ca_edge_start = 0.55
-shader_parameter/ca_blur = 2.55
+shader_parameter/chromatic_aberration = 2.0
+shader_parameter/ca_edge_start = 0.62
+shader_parameter/ca_blur = 3.0
+shader_parameter/ca_radial_power = 1.88
+shader_parameter/ca_edge_response = 1.35
+shader_parameter/ca_highlight_fringe = 0.5
 shader_parameter/distortion = 0.035
 shader_parameter/distortion_cubic = 0.015
-shader_parameter/distortion_overscan = 1.08
+shader_parameter/distortion_overscan = 1.11
 shader_parameter/distortion_center = Vector2(0.5, 0.5)
 shader_parameter/enable_rgb_digital_noise = true
 shader_parameter/grain_strength = 0.01
@@ -70,18 +77,34 @@ shader_parameter/tint = 0.0
 shader_parameter/lift = Color(0, 0, 0, 1)
 shader_parameter/gamma = Color(1, 1, 1, 1)
 shader_parameter/gain = Color(1, 1, 1, 1)
-shader_parameter/bloom_intensity = 0.35
-shader_parameter/bloom_threshold = 1.0
-shader_parameter/bloom_softness = 0.35
-shader_parameter/bloom_radius = 4.0
+shader_parameter/bloom_intensity = 0.13
+shader_parameter/bloom_threshold = 0.72
+shader_parameter/bloom_softness = 0.57
+shader_parameter/bloom_radius = 1.31
 shader_parameter/bloom_tint = Color(1, 1, 1, 1)
 shader_parameter/lut_size = 33.0
 shader_parameter/lut_strength = 1.0
-shader_parameter/halation_intensity = 0.8
-shader_parameter/halation_threshold = 1.0
-shader_parameter/halation_softness = 0.25
-shader_parameter/halation_radius = 6.1
+shader_parameter/halation_intensity = 1.2
+shader_parameter/halation_threshold = 0.35
+shader_parameter/halation_softness = 0.45
+shader_parameter/halation_radius = 1.8
 shader_parameter/halation_color = Color(1, 0.35, 0.12, 1)
+shader_parameter/halation_depth_aware = true
+shader_parameter/halation_depth_reference = 8.0
+shader_parameter/halation_depth_curve = 0.65
+shader_parameter/halation_depth_min_scale = 0.55
+shader_parameter/halation_depth_max_scale = 0.9
+shader_parameter/halation_depth_rejection = 1.25
+shader_parameter/enable_post_dof = true
+shader_parameter/post_dof_amount = 0.02
+shader_parameter/post_dof_near_enabled = false
+shader_parameter/post_dof_near_distance = 2.0
+shader_parameter/post_dof_near_transition = 1.0
+shader_parameter/post_dof_far_enabled = true
+shader_parameter/post_dof_far_distance = 85.0
+shader_parameter/post_dof_far_transition = 5.0
+shader_parameter/post_dof_near_clip = 0.05
+shader_parameter/post_dof_far_clip = 4000.0
 shader_parameter/lens_flare_veil_intensity = 0.45
 shader_parameter/lens_flare_halo_intensity = 0.4
 shader_parameter/lens_flare_halo_radius = 0.55
@@ -113,15 +136,23 @@ shader_parameter/flare_magenta_tint = Color(1, 0.72, 0.94, 1)
 
 [sub_resource type="QuadMesh" id="QuadMesh_rvmsc"]
 flip_faces = true
-size = Vector2(2.2697532, 2.2697532)
+size = Vector2(3.1881073, 2.2697532)
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_lro2o"]
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_71y1r"]
 shader = ExtResource("4_tk2wq")
 shader_parameter/flare_count = 1
-shader_parameter/flare_data = PackedVector4Array(0.63136655, 0.23517165, 0.165, 0.31727564, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+shader_parameter/flare_data = PackedVector4Array(0.06329146, 0.15426052, 0.165, 0.22423013, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 shader_parameter/flare_tint = PackedVector4Array(1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 shader_parameter/use_bokeh_texture = false
-shader_parameter/master_intensity = 0.2
+shader_parameter/enable_source_visibility_gating = true
+shader_parameter/source_visibility_threshold = 0.65
+shader_parameter/source_visibility_softness = 0.18
+shader_parameter/source_visibility_sample_radius = 0.006
+shader_parameter/enable_center_safe_zone = true
+shader_parameter/allowed_flare_area_radius_scale = 0.55
+shader_parameter/center_dead_zone_radius_scale = 0.114
+shader_parameter/allowed_flare_area_feather = 0.15
+shader_parameter/master_intensity = 0.21
 shader_parameter/blur_amount = 1.8
 shader_parameter/chroma_amount = 0.02
 shader_parameter/halo_intensity = 0.0
@@ -139,6 +170,25 @@ shader_parameter/source_core_intensity = 0.35
 shader_parameter/ghost_nearness = 1.0
 shader_parameter/ghost_color_boost = 1.25
 
+[sub_resource type="PlaneMesh" id="PlaneMesh_pr8hv"]
+
+[sub_resource type="ConcavePolygonShape3D" id="ConcavePolygonShape3D_tk2wq"]
+data = PackedVector3Array(1, 0, 1, -1, 0, 1, 1, 0, -1, -1, 0, 1, -1, 0, -1, 1, 0, -1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_l2eot"]
+albedo_color = Color(0.44705883, 1, 0.24705882, 1)
+roughness = 0.75
+
+[sub_resource type="BoxMesh" id="BoxMesh_1b68x"]
+material = SubResource("StandardMaterial3D_l2eot")
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_pr8hv"]
+albedo_color = Color(0.80784315, 0.34901962, 0.89411765, 1)
+roughness = 0.36
+
+[sub_resource type="SphereMesh" id="SphereMesh_tk2wq"]
+material = SubResource("StandardMaterial3D_pr8hv")
+
 [node name="ExampleScene" type="Node3D" unique_id=1521561819]
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1154424814]
@@ -146,20 +196,21 @@ environment = SubResource("Environment_a0tk4")
 camera_attributes = SubResource("CameraAttributesPhysical_a0tk4")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=738188562]
-transform = Transform3D(-0.32905942, 0.25792718, -0.90840167, -0.3459317, 0.86217636, 0.3701125, 0.8786645, 0.4360339, -0.19448212, 0, 2.7531812, 0.6479912)
+transform = Transform3D(0.2735795, 0.69623697, -0.66363287, -0.65234375, 0.64132893, 0.40391165, 0.7068252, 0.32241488, 0.6296402, 0.06197132, 2.8002117, 0.665498)
 shadow_enabled = true
 
 [node name="CameraController" type="Node3D" parent="." unique_id=723358648]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.7004211, 4.5872955)
 
 [node name="Camera3D" type="Camera3D" parent="CameraController" unique_id=808740934]
-transform = Transform3D(0.01197274, 0, 0.9999284, 0, 1, 0, -0.9999284, 0, 0.011972755, 0, 0, 0)
+transform = Transform3D(0.016258446, 0.067509696, 0.9975861, 0.0023922399, 0.9977122, -0.06755722, -0.99986494, 0.0034848452, 0.016059712, 4.7106466, 0.05983824, -2.8349767)
 attributes = SubResource("CameraAttributesPractical_p7lbm")
 current = true
 script = ExtResource("1_l2eot")
 
 [node name="CameraPostFXQuad" type="MeshInstance3D" parent="CameraController/Camera3D" unique_id=397183398]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -1.45)
-material_override = SubResource("ShaderMaterial_a2rhk")
+material_override = SubResource("ShaderMaterial_vqley")
 cast_shadow = 0
 extra_cull_margin = 100000.0
 mesh = SubResource("QuadMesh_rvmsc")
@@ -167,18 +218,75 @@ mesh = SubResource("QuadMesh_rvmsc")
 [node name="PostProcessingNode" parent="CameraController" unique_id=142678238 node_paths=PackedStringArray("target_camera", "sun_light") instance=ExtResource("3_pr8hv")]
 target_camera = NodePath("../Camera3D")
 sun_light = NodePath("../../DirectionalLight3D")
-screen_entry_margin = 0.14
-screen_edge_softness = 0.08
-edge_presence_strength = 0.3
-flare_fade_in_speed = 12.0
-flare_fade_out_speed = 8.0
+enable_distortion = false
+halation_depth_curve = 0.65
+halation_depth_min_scale = 0.55
+halation_depth_max_scale = 0.9
+halo_intensity = 0.0
 
 [node name="LensFlareCanvasLayer" type="CanvasLayer" parent="CameraController/PostProcessingNode" unique_id=1604535242]
 
 [node name="LensFlareRect" type="ColorRect" parent="CameraController/PostProcessingNode/LensFlareCanvasLayer" unique_id=35454626]
-material = SubResource("ShaderMaterial_lro2o")
+material = SubResource("ShaderMaterial_71y1r")
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 mouse_filter = 2
 color = Color(0, 0, 0, 0)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=1989602594]
+transform = Transform3D(30.996084, 0, 0, 0, 1.0042336, 0, 0, 0, 25.35811, 0, 0, 0)
+mesh = SubResource("PlaneMesh_pr8hv")
+
+[node name="StaticBody3D" type="StaticBody3D" parent="MeshInstance3D" unique_id=15437419]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="MeshInstance3D/StaticBody3D" unique_id=1265913389]
+shape = SubResource("ConcavePolygonShape3D_tk2wq")
+
+[node name="MeshInstance3D2" type="MeshInstance3D" parent="." unique_id=76165126]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
+mesh = SubResource("BoxMesh_1b68x")
+
+[node name="MeshInstance3D2" type="MeshInstance3D" parent="MeshInstance3D2" unique_id=363268923]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.95350075, 0)
+mesh = SubResource("SphereMesh_tk2wq")
+
+[node name="MeshInstance3D3" type="MeshInstance3D" parent="." unique_id=574843661]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, -4.180848)
+mesh = SubResource("BoxMesh_1b68x")
+
+[node name="MeshInstance3D2" type="MeshInstance3D" parent="MeshInstance3D3" unique_id=1996649941]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.95350075, 0)
+mesh = SubResource("SphereMesh_tk2wq")
+
+[node name="MeshInstance3D4" type="MeshInstance3D" parent="." unique_id=1755190177]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 7.085869)
+mesh = SubResource("BoxMesh_1b68x")
+
+[node name="MeshInstance3D2" type="MeshInstance3D" parent="MeshInstance3D4" unique_id=1300528793]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.95350075, 0)
+mesh = SubResource("SphereMesh_tk2wq")
+
+[node name="MeshInstance3D5" type="MeshInstance3D" parent="." unique_id=294961248]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.5783377, 0.5, 7.085869)
+mesh = SubResource("BoxMesh_1b68x")
+
+[node name="MeshInstance3D2" type="MeshInstance3D" parent="MeshInstance3D5" unique_id=984787008]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.95350075, 0)
+mesh = SubResource("SphereMesh_tk2wq")
+
+[node name="MeshInstance3D6" type="MeshInstance3D" parent="." unique_id=349145384]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.5783377, 0.5, 2.369885)
+mesh = SubResource("BoxMesh_1b68x")
+
+[node name="MeshInstance3D2" type="MeshInstance3D" parent="MeshInstance3D6" unique_id=976776571]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.95350075, 0)
+mesh = SubResource("SphereMesh_tk2wq")
+
+[node name="MeshInstance3D7" type="MeshInstance3D" parent="." unique_id=265350280]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.5783377, 0.5, -5.6813216)
+mesh = SubResource("BoxMesh_1b68x")
+
+[node name="MeshInstance3D2" type="MeshInstance3D" parent="MeshInstance3D7" unique_id=1630519551]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.95350075, 0)
+mesh = SubResource("SphereMesh_tk2wq")
