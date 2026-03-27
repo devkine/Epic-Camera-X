@@ -242,7 +242,7 @@ addons/EpicCameraX/examples/flycamera_viewport.gd
 World
 ├── DirectionalLight3D
 ├── Camera3D
-│   └── CameraPostProcessing
+│   └── PostProcessingNode
 └── Environment / meshes / lights
 ```
 
