@@ -1,4 +1,5 @@
 # EpicCameraX
+**OpenAI ChatGPT is used to build this plugin**
 
 EpicCameraX is a Godot 4 editor addon that adds a reusable **CameraPostProcessing** node for cinematic camera finishing.
 
